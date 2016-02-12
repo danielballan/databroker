@@ -265,7 +265,7 @@ def fill_event(event):
     """
     is_external = _inspect_descriptor(event.descriptor)
     for data_key, value in six.iteritems(event.data):
-        if is_external.get(data_key, False):
+        if is_external.get(data_key):
             # Retrieve a numpy array from filestore
             event.data[data_key] = fs.retrieve(value)
 
