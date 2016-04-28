@@ -173,7 +173,7 @@ class Broker(object):
         """
         return search(key, self.mds)
 
-    def __call__(self, **kwargs):
+    def __call__(self, text_search=None, **kwargs):
         """Given search criteria, find Headers describing runs.
 
         This function returns a list of dictionary-like objects encapsulating
@@ -183,6 +183,8 @@ class Broker(object):
 
         Parameters
         ----------
+        text_serach : str, optional
+            serach full text of RunStart documents
         start_time : time-like, optional
             Include Headers for runs started after this time. Valid
             "time-like" representations are:
@@ -215,12 +217,12 @@ class Broker(object):
 
         Examples
         --------
+        >>> DataBroker('keyword')  # full text search
         >>> DataBroker(start_time='2015-03-05', stop_time='2015-03-10')
         >>> DataBroker(data_key='motor1')
         >>> DataBroker(data_key='motor1', start_time='2015-03-05')
         """
         data_key = kwargs.pop('data_key', None)
-        run_start = self.mds.find_run_starts(**kwargs)
         if data_key is not None:
             node_name = 'data_keys.{0}'.format(data_key)
 
@@ -241,10 +243,16 @@ class Broker(object):
                     known_uids.append(rs['uid'])
                     result.append(rs)
             run_start = result
-        result = []
+        elif text_search is not None:
+            query = {'$text': {'$search': text_search}}
+            run_start = self.mds.find_run_starts(**query)
+        else:
+            query = kwargs
+            run_start = self.mds.find_run_starts(**query)
+        headers = []
         for rs in run_start:
-            result.append(Header.from_run_start(self.mds, rs))
-        return result
+            headers.append(Header.from_run_start(self.mds, rs))
+        return headers
 
     def find_headers(self, **kwargs):
         "This function is deprecated."
