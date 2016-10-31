@@ -628,3 +628,100 @@ def _external_keys(descriptor, _cache=boltons.cacheutils.LRU(max_size=500)):
         ek = {k: v.get('external', None) for k, v in data_keys.items()}
         _cache[descriptor['uid']] = ek
     return ek
+
+
+class StreamAccessor(dict):
+    """
+    A read-only dict of Stream objects that supports dot access for easy of use
+    """
+    def __getattr__(self, key):
+        return self[key]
+
+    def __setitem__(self, key):
+        raise ReadOnly()
+
+    def __pop__(self, key):
+        raise ReadOnly()
+
+    def __popitem__(self):
+        raise ReadOnly()
+
+    def __delitem__(self):
+        raise ReadOnly()
+
+    def setdefault(self, key, val):
+        raise ReadOnly()
+
+    def update(self, val):
+        raise ReadOnly()
+
+
+class Stream:
+    """
+    A stream of events with the same data keys.
+
+    This is typically associated with one EventDescriptor, but it may wrap
+    up multiple with the same stream name.
+    """
+    def __init__(self, db, name, descriptors):
+        self._db = db
+        self._name = name
+        self._descriptors = descriptors
+
+    def get_events(self, *args, **kwargs):
+        return self._db.get_events(*args, stream_name=self._name, **kwargs)
+
+    @property
+    def get_table(self, *args, **kwargs):
+        return self._db.get_table(*args, stream_name=self._name, **kwargs)
+
+
+class ReadOnly(Exception):
+    pass
+
+
+class Run:
+    def __init__(self, db, uid):
+        self._db = db
+        self._start = db.mds.run_start_given_uid(uid)
+        try:
+            self._stop = db.mds.stop_by_start(uid)
+        except db.mds.NoRunStop:
+            self._stop = None
+        try:
+            self._descriptors = db.mds.descriptors_by_start(uid)
+        except db.mds.NoEventDescriptors:
+            self._descriptors = []
+
+        stream_names = set(d.name for d in self._descriptors)
+        streams = [Stream(d for d in self._descriptors if d.name == name)
+                   for name in stream_names]
+        self._streams = StreamAccessor(streams)
+
+    @property
+    def streams(self):
+        return self._streams
+
+    def get_table(self):
+        return self.db.get_table(stream_name=ALL)
+
+    def get_events(self):
+        return self.db.get_events(stream_name=ALL)
+
+    @property
+    def db(self):
+        return self._db
+
+    @property
+    def start(self):
+        return self._start
+
+    @property
+    def descriptors(self):
+        return self._descriptors
+
+    @property
+    def stop(self):
+        if self._stop is None:
+            raise AttributeError("This run has no RunStop document.")
+        return self._stop
