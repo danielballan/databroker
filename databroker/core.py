@@ -703,7 +703,10 @@ class Run:
         return self._streams
 
     def get_table(self):
-        return self.db.get_table(stream_name=ALL)
+        raise NotImplementedError("Instead of .get_table(), use one of "
+                                  "these:\n" +
+                                  "".join([".streams.{}.get_table()".format(sn)
+                                           for sn in self.streams])
 
     def get_events(self):
         return self.db.get_events(stream_name=ALL)
