@@ -18,7 +18,8 @@ from .core import (Header,
                    get_fields,  # for conveniece
                    ALL
                   )
-
+import time
+import traceback
 
 def _format_time(search_dict, tz):
     """Helper function to format the time arguments in a search dict
@@ -883,6 +884,9 @@ def _munge_time(t, timezone):
     return timezone.localize(t).replace(microsecond=0).isoformat()
 
 
+mutated_keys = {'descriptor': ('data_keys', ), 'event': ('data', )}
+
+
 def store_dec(db, external_writers=None):
     """Decorate a generator of documents to save them to the databases.
 
@@ -912,8 +916,10 @@ def store_dec(db, external_writers=None):
             for name, doc in gen:
                 # doc will pass through unchanged; fs_doc may be modified to
                 # replace some values with references to filestore.
-                if external_writers:
+                if external_writers and name in mutated_keys.keys():
                     fs_doc = dict(doc)
+                    for v in mutated_keys[name]:
+                        fs_doc[v] = dict(doc[v])
                 else:
                     fs_doc = doc  # for perf
 
@@ -941,6 +947,7 @@ def store_dec(db, external_writers=None):
 
                     doc.update(
                         filled={k: True for k in external_writers.keys()})
+                    fs_doc.pop('filled')
 
                 elif name == 'stop':
                     for data_key, writer in list(writers.items()):
@@ -992,6 +999,7 @@ def event_map(stream_name, data_keys, provenance):
                     if run_start_uid is None:
                         raise RuntimeError("Received EventDescriptor before "
                                            "RunStart.")
+                    descriptor_uid = doc['uid']
                     new_data_keys = dict(doc['data_keys'])
                     for k, v in new_data_keys.items():
                         new_data_keys[k].update(v)
@@ -1002,16 +1010,22 @@ def event_map(stream_name, data_keys, provenance):
                                           name=stream_name)
                     yield 'descriptor', new_descriptor
 
-                elif name == 'event' and doc['descriptor'] == descriptor_uid:
+                elif name == 'event' and doc['descriptor']['uid'] == descriptor_uid:
                     if run_start_uid is None:
                         raise RuntimeError("Received Event before RunStart.")
                     try:
                         new_event = dict(doc)
+                        new_event.pop('_name')
+                        new_event.update(dict(uid=str(uuid.uuid4()),
+                                              time=time.time(),
+                                              descriptor=new_descriptor['uid'],
+                                              seq_num=0))
                         for data_key in data_keys:
-                            value = event['data'][data_key]
+                            value = doc['data'][data_key]
                             new_event['data'][data_key] = f(value)
                         yield 'event', new_event
-                    except Exception:
+                    except Exception as e:
+                        print(e)
                         new_stop = dict(uid=str(uuid.uuid4()),
                                         time=time.time(),
                                         run_start=run_start_uid,
