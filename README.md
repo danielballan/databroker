@@ -1,12 +1,32 @@
-databroker
-==========
-
-a unified interface to data sources
+# databroker
 
 
-Badges!
-=======
+A unified interface to the various data sources at NSLS-II.
+
+Implemented:
+
+- [metadatastore](https://github.com/NSLS-II/metadatastore)
+- [filestore](https://github.com/NSLS-II/filestore)
+
+Planned:
+
+- channelarchiver
+
+[Databroker documentation](http://nsls-ii.github.io/databroker)
+
+[NSLS2 software overview](http://nsls-ii.github.io)
+
+---------------
+
 [![Build Status](https://travis-ci.org/NSLS-II/databroker.svg?branch=master)](https://travis-ci.org/NSLS-II/databroker)
-[![Code Health](https://landscape.io/github/NSLS-II/databroker/master/landscape.svg?style=flat)](https://landscape.io/github/NSLS-II/databroker/master)
-[![Coverage Status](https://coveralls.io/repos/NSLS-II/databroker/badge.svg)](https://coveralls.io/r/NSLS-II/databroker)
-[![codecov.io](http://codecov.io/github/NSLS-II/databroker/coverage.svg?branch=master)](http://codecov.io/github/NSLS-II/databroker?branch=master)
+[![codecov](https://codecov.io/gh/NSLS-II/databroker/branch/master/graph/badge.svg)](https://codecov.io/gh/NSLS-II/databroker)
+[![Anaconda-Server Badge](https://anaconda.org/lightsource2/databroker/badges/version.svg)](https://anaconda.org/lightsource2/databroker)
+[![Anaconda-Server Badge](https://anaconda.org/lightsource2/databroker/badges/license.svg)](https://anaconda.org/lightsource2/databroker)
+
+## Conda Recipes
+
+Install the most recent tagged build: `conda install databroker -c lightsource2-tag`
+
+Install the most recent tagged build: `conda install databroker -c lightsource2-dev`
+
+Find the tagged recipe [here](https://github.com/NSLS-II/lightsource2-recipes/tree/master/recipes-tag/databroker) and the dev recipe [here](https://github.com/NSLS-II/lightsource2-recipes/tree/master/recipes-dev/databroker)
