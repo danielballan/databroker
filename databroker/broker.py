@@ -1075,6 +1075,8 @@ def event_map(stream_name, data_keys, provenance):
 def header_io(db_in, db_out):
     def outer(f):
         def inner(headers):
+            if not isinstance(headers, list):
+                headers = [headers]
             output_uids = []
             streams = [db_in.restream(header, fill=True) for header in headers]
             for name, doc in f(*streams):
