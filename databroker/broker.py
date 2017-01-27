@@ -997,13 +997,14 @@ def event_map(stream_name, data_keys, provenance):
         (e.g., {'shape': [10, 10]}). In the simple case where the shape,
         datatype, etc. are unchanged, the dict is just empty:
         ``{'image': {}}`` and the original metadata passed through.
-    proveance : dict
+    provenance : dict
         metadata about this operation
     """
     def outer(f):
         def inner(stream):
             run_start_uid = None
             descriptor_uid = None
+            descriptor_map = {}  # Map of old to new descriptor uids
             for name, doc in stream:
                 if name == 'start':
                     run_start_uid = str(uuid.uuid4())
@@ -1019,9 +1020,10 @@ def event_map(stream_name, data_keys, provenance):
                                            "RunStart.")
                     descriptor_uid = doc_or_uid_to_uid(doc)
                     new_data_keys = dict(doc['data_keys'])
-                    for k, v in new_data_keys.items():
+                    for k, v in data_keys.items():
                         new_data_keys[k].update(v)
                     new_descriptor_uid = str(uuid.uuid4())
+                    descriptor_map.update({descriptor_uid: new_descriptor_uid})
                     new_descriptor = dict(uid=new_descriptor_uid,
                                           time=time.time(),
                                           run_start=run_start_uid,
@@ -1039,8 +1041,9 @@ def event_map(stream_name, data_keys, provenance):
                         # mutate the contents of new_event['data'].
                         new_event['data'] = dict(new_event['data'])
                         new_event['uid'] = str(uuid.uuid4())
-                        new_event['descriptor'] = new_descriptor_uid
-                        for data_key in new_data_keys:
+                        new_event['descriptor'] = descriptor_map[
+                            doc_or_uid_to_uid(doc['descriptor'])]
+                        for data_key in data_keys:
                             value = doc['data'][data_key]
                             new_event['data'][data_key] = f(value)
                         yield 'event', new_event
@@ -1048,7 +1051,10 @@ def event_map(stream_name, data_keys, provenance):
                         new_stop = dict(uid=str(uuid.uuid4()),
                                         time=time.time(),
                                         run_start=run_start_uid,
-                                        exit_status='failure')
+                                        exit_status='failure',
+                                        reason=repr(e),
+                                        traceback=traceback.format_exc()
+                                        )
                         yield 'stop', new_stop
                         raise
 
@@ -1068,10 +1074,10 @@ def event_map(stream_name, data_keys, provenance):
 
 def header_io(db_in, db_out):
     def outer(f):
-        def inner(header):
+        def inner(headers):
             output_uids = []
-            stream = db_in.restream(header, fill=True)
-            for name, doc in f(stream):
+            streams = [db_in.restream(header, fill=True) for header in headers]
+            for name, doc in f(*streams):
                 if name == 'start':
                     output_uids.append(doc_or_uid_to_uid(doc))
             return db_out[output_uids]
