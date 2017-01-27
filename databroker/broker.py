@@ -1019,7 +1019,7 @@ def event_map(stream_name, data_keys, provenance):
                                            "RunStart.")
                     descriptor_uid = doc_or_uid_to_uid(doc)
                     new_data_keys = dict(doc['data_keys'])
-                    for k, v in new_data_keys.items():
+                    for k, v in data_keys.items():
                         new_data_keys[k].update(v)
                     new_descriptor_uid = str(uuid.uuid4())
                     new_descriptor = dict(uid=new_descriptor_uid,
@@ -1040,7 +1040,7 @@ def event_map(stream_name, data_keys, provenance):
                         new_event['data'] = dict(new_event['data'])
                         new_event['uid'] = str(uuid.uuid4())
                         new_event['descriptor'] = new_descriptor_uid
-                        for data_key in new_data_keys:
+                        for data_key in data_keys:
                             value = doc['data'][data_key]
                             new_event['data'][data_key] = f(value)
                         yield 'event', new_event
