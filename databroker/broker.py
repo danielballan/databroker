@@ -997,7 +997,7 @@ def event_map(stream_name, data_keys, provenance):
         (e.g., {'shape': [10, 10]}). In the simple case where the shape,
         datatype, etc. are unchanged, the dict is just empty:
         ``{'image': {}}`` and the original metadata passed through.
-    proveance : dict
+    provenance : dict
         metadata about this operation
     """
     def outer(f):
