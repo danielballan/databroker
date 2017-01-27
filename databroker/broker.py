@@ -1004,6 +1004,7 @@ def event_map(stream_name, data_keys, provenance):
         def inner(stream):
             run_start_uid = None
             descriptor_uid = None
+            descriptor_map = {}  # Map of old to new descriptor uids
             for name, doc in stream:
                 if name == 'start':
                     run_start_uid = str(uuid.uuid4())
@@ -1022,6 +1023,7 @@ def event_map(stream_name, data_keys, provenance):
                     for k, v in data_keys.items():
                         new_data_keys[k].update(v)
                     new_descriptor_uid = str(uuid.uuid4())
+                    descriptor_map.update({descriptor_uid: new_descriptor_uid})
                     new_descriptor = dict(uid=new_descriptor_uid,
                                           time=time.time(),
                                           run_start=run_start_uid,
@@ -1039,7 +1041,8 @@ def event_map(stream_name, data_keys, provenance):
                         # mutate the contents of new_event['data'].
                         new_event['data'] = dict(new_event['data'])
                         new_event['uid'] = str(uuid.uuid4())
-                        new_event['descriptor'] = new_descriptor_uid
+                        new_event['descriptor'] = descriptor_map[
+                            doc_or_uid_to_uid(doc['descriptor'])]
                         for data_key in data_keys:
                             value = doc['data'][data_key]
                             new_event['data'][data_key] = f(value)
