@@ -1048,7 +1048,10 @@ def event_map(stream_name, data_keys, provenance):
                         new_stop = dict(uid=str(uuid.uuid4()),
                                         time=time.time(),
                                         run_start=run_start_uid,
-                                        exit_status='failure')
+                                        exit_status='failure',
+                                        reason=repr(e),
+                                        traceback=traceback.format_exc()
+                                        )
                         yield 'stop', new_stop
                         raise
 
