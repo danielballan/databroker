@@ -1068,10 +1068,10 @@ def event_map(stream_name, data_keys, provenance):
 
 def header_io(db_in, db_out):
     def outer(f):
-        def inner(header):
+        def inner(headers):
             output_uids = []
-            stream = db_in.restream(header, fill=True)
-            for name, doc in f(stream):
+            streams = [db_in.restream(header, fill=True) for header in headers]
+            for name, doc in f(*streams):
                 if name == 'start':
                     output_uids.append(doc_or_uid_to_uid(doc))
             return db_out[output_uids]
