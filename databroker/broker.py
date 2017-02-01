@@ -984,7 +984,7 @@ def store_dec(db, external_writers=None):
     return wrap
 
 
-def event_map(stream_name, data_keys, provenance):
+def event_map(stream_name, data_keys, key_map={}, provenance={}):
     """
     Map a function onto each event in a stream.
 
@@ -994,10 +994,15 @@ def event_map(stream_name, data_keys, provenance):
         e.g., 'primary' or 'baseline'
     data_keys : dict
         key(s) in event['data'] to apply function to (e.g., 'image') mapped to
-        a dict with any updates to the data key value
-        (e.g., {'image' : {'shape': [10, 10]}}). In the simple case where the shape,
-        datatype, etc. are unchanged, the dict is just empty:
-        ``{'image': {}}`` and the original metadata passed through.
+        a dict with any updates to the data key value (e.g., {'image' :
+        {'shape': [10, 10]}}). In the simple case where the shape, datatype,
+        etc. are unchanged, the dict is just empty: ``{'image': {}}`` and the
+        original metadata passed through.
+    key_map : dict
+        mapping of old key to new key, ``key_map = {'image' : 'sq'}`` will save
+        the transformed image into ``sq``
+        If mapped key is the empty string, the key is deleted from event
+        Will also map keys not in data_keys (untransformed keys).
     proveance : dict
         metadata about this operation
     """
@@ -1021,8 +1026,14 @@ def event_map(stream_name, data_keys, provenance):
                     descriptor_uid = doc_or_uid_to_uid(doc)
                     new_data_keys = deepcopy(doc['data_keys'])
                     data_keys_copy = deepcopy(data_keys)
+                    # make the new key map
+                    new_key_map = dict()
+                    for key in data_keys:
+                        new_key_map[key] = key
+                    new_key_map.update(deepcopy(key_map))
                     for k, v in data_keys_copy.items():
-                        new_data_keys[k].update(v)
+                        new_data_keys[new_key_map[k]] = deepcopy(doc['data_keys'][k])
+                        new_data_keys[new_key_map[k]].update(v)
                     new_descriptor_uid = str(uuid.uuid4())
                     new_descriptor = dict(uid=new_descriptor_uid,
                                           time=time.time(),
@@ -1044,7 +1055,18 @@ def event_map(stream_name, data_keys, provenance):
                         new_event['descriptor'] = new_descriptor_uid
                         for data_key in data_keys_copy:
                             value = doc['data'][data_key]
-                            new_event['data'][data_key] = f(value, **kwargs)
+                            if new_key_map[data_key] is not '':
+                                new_event['data'][new_key_map[data_key]] = f(value, **kwargs)
+                        # now delete keys that were mapped already
+                        for key, val in new_key_map.items():
+                            # double check user didn't map key to itself
+                            if key is not val:
+                                # make sure untransformed data is also copied
+                                if key in new_event:
+                                    if val is not '':
+                                        # finally make sure not empty string
+                                        new_event['data'][val] = new_event['data'][key]
+                                del new_event['data'][key]
                         yield 'event', new_event
                     except Exception as e:
                         new_stop = dict(uid=str(uuid.uuid4()),
