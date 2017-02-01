@@ -1049,7 +1049,8 @@ def event_map(stream_name, data_keys, key_map={}, provenance={}):
                     data_keys_copy = deepcopy(data_keys) #need to deepcopy
                     # copy new keys (data_keys) into new_data_keys
                     for k, v in data_keys_copy.items():
-                        new_data_keys[k].update(v) #reason for deepcopy
+                        # don't update, just replace
+                        new_data_keys[k] = v #reason for deepcopy
                     # now re-map final keys
                     _map_keys(new_data_keys, key_map)
                     new_descriptor_uid = str(uuid.uuid4())
@@ -1058,6 +1059,7 @@ def event_map(stream_name, data_keys, key_map={}, provenance={}):
                                           run_start=run_start_uid,
                                           data_keys=new_data_keys,
                                           name=stream_name)
+                    print(new_data_keys)
                     yield 'descriptor', new_descriptor
 
                 elif (name == 'event' and
