@@ -989,6 +989,22 @@ def store_dec(db, external_writers=None, filled=True):
     return wrap
 
 
+def _map_keys(doc, keymap):
+    ''' Map keys in document using keymap.
+        doc : the document to remap
+        keymap : the keys to map to
+            ex :  {'image' : 'image2'}
+                {'image' : ''}
+        if second key is blank (''), then delete key
+    '''
+    for key, val in keymap.items():
+        if val is '':
+            doc.pop(key)
+        elif key is not val:
+            doc[val] = doc[key]
+            doc.pop(key)
+
+
 def event_map(stream_name, data_keys, key_map={}, provenance={}):
     """
     Map a function onto each event in a stream.
@@ -1008,7 +1024,7 @@ def event_map(stream_name, data_keys, key_map={}, provenance={}):
         the transformed image into ``sq``
         If mapped key is the empty string, the key is deleted from event
         Will also map keys not in data_keys (untransformed keys).
-    proveance : dict
+    provenance : dict
         metadata about this operation
     """
     def outer(f):
@@ -1030,15 +1046,12 @@ def event_map(stream_name, data_keys, key_map={}, provenance={}):
                                            "RunStart.")
                     descriptor_uid = doc_or_uid_to_uid(doc)
                     new_data_keys = deepcopy(doc['data_keys'])
-                    data_keys_copy = deepcopy(data_keys)
-                    # make the new key map
-                    new_key_map = dict()
-                    for key in data_keys:
-                        new_key_map[key] = key
-                    new_key_map.update(deepcopy(key_map))
+                    data_keys_copy = deepcopy(data_keys) #need to deepcopy
+                    # copy new keys (data_keys) into new_data_keys
                     for k, v in data_keys_copy.items():
-                        new_data_keys[new_key_map[k]] = deepcopy(doc['data_keys'][k])
-                        new_data_keys[new_key_map[k]].update(v)
+                        new_data_keys[k].update(v) #reason for deepcopy
+                    # now re-map final keys
+                    _map_keys(new_data_keys, key_map)
                     new_descriptor_uid = str(uuid.uuid4())
                     new_descriptor = dict(uid=new_descriptor_uid,
                                           time=time.time(),
@@ -1058,26 +1071,13 @@ def event_map(stream_name, data_keys, key_map={}, provenance={}):
                         new_event['data'] = dict(new_event['data'])
                         new_event['uid'] = str(uuid.uuid4())
                         new_event['descriptor'] = new_descriptor_uid
-                        # we might want to first map, then move
-                        # and maybe use a global func for move, since
-                        # moving requires also moving timestamps
+                        # need to update data and timestamps
                         for data_key in data_keys_copy:
                             value = doc['data'][data_key]
-                            if new_key_map[data_key] is not '':
-                                new_event['data'][new_key_map[data_key]] = f(value, **kwargs)
-                                # update time stamp
-                                new_event['timestamps'][new_key_map[data_key]] = time.time()
-                        # now delete keys that were mapped already
-                        for key, val in new_key_map.items():
-                            # double check user didn't map key to itself
-                            if key is not val:
-                                # make sure untransformed data is also copied
-                                if key in new_event:
-                                    if val is not '':
-                                        # finally make sure not empty string
-                                        new_event['data'][val] = new_event['data'][key]
-                                del new_event['data'][key]
-                                del new_event['timestamps'][key]
+                            new_event['data'][data_key] = f(value, **kwargs)
+                            new_event['timestamps'][data_key] = time.time()
+                        _map_keys(new_event['data'], key_map)
+                        _map_keys(new_event['timestamps'], key_map)
                         yield 'event', new_event
                     except Exception as e:
                         new_stop = dict(uid=str(uuid.uuid4()),
