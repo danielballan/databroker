@@ -9,6 +9,7 @@ import logging
 import numbers
 import requests
 import time
+from copy import deepcopy
 from doct import Document
 from .core import (Header,
                    get_events as _get_events,
@@ -1018,8 +1019,9 @@ def event_map(stream_name, data_keys, provenance):
                         raise RuntimeError("Received EventDescriptor before "
                                            "RunStart.")
                     descriptor_uid = doc_or_uid_to_uid(doc)
-                    new_data_keys = dict(doc['data_keys'])
-                    for k, v in data_keys.items():
+                    new_data_keys = deepcopy(doc['data_keys'])
+                    data_keys_copy = deepcopy(data_keys)
+                    for k, v in data_keys_copy.items():
                         new_data_keys[k].update(v)
                     new_descriptor_uid = str(uuid.uuid4())
                     new_descriptor = dict(uid=new_descriptor_uid,
@@ -1040,7 +1042,7 @@ def event_map(stream_name, data_keys, provenance):
                         new_event['data'] = dict(new_event['data'])
                         new_event['uid'] = str(uuid.uuid4())
                         new_event['descriptor'] = new_descriptor_uid
-                        for data_key in new_data_keys:
+                        for data_key in data_keys_copy:
                             value = doc['data'][data_key]
                             new_event['data'][data_key] = f(value, **kwargs)
                         yield 'event', new_event
