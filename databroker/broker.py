@@ -905,7 +905,7 @@ def _munge_time(t, timezone):
     return timezone.localize(t).replace(microsecond=0).isoformat()
 
 
-def store_dec(db, external_writers=None):
+def store_dec(db, external_writers=None, filled=True):
     """Decorate a generator of documents to save them to the databases.
 
     The input stream of (name, document) pairs passes through unchanged.
@@ -917,13 +917,17 @@ def store_dec(db, external_writers=None):
     db: ``databroker.Broker`` instance
         The databroker to store the documents in, must have writeable
         metadatastore and writeable filestore if ``external`` is not empty.
-    external_writers : dict
+    external_writers : dict, optional
         Maps data keys to a ``WriterClass``, which is responsible for writing
         data to disk and creating a record in filestore. It will be
         instantiated (possible multiple times) with the argument ``db.fs``.
         If it requires additional arguments, use ``functools.partial`` to
         produce a callable that requires only ``db.fs`` to instantiate the
         ``WriterClass``.
+    filled: bool, optional
+        If false, replace stored data with uid pointing to record in filestore.
+        If true, leave data as is. Default is true (as streams may be used
+            as input for later computations)
         """
     if external_writers is None:
         external_writers = {}  # {'name': WriterClass}
@@ -956,15 +960,16 @@ def store_dec(db, external_writers=None):
                     # The writer writes data to an external file, creates a
                     # datum record in the filestore database, and return that
                     # datum_id. We modify fs_doc in place, replacing the data
-                    # values with that datum_id.
+                    # values with that datum_id, only if filled=False.
                     for data_key, writer in writers.items():
                         # data doesn't have to exist
                         if data_key in fs_doc['data']:
                             fs_uid = writer.write(fs_doc['data'][data_key])
-                            fs_doc['data'][data_key] = fs_uid
+                            if not filled:
+                                fs_doc['data'][data_key] = fs_uid
 
                     doc.update(
-                        filled={k: False for k in external_writers.keys()})
+                        filled={k: filled for k in external_writers.keys()})
 
                 elif name == 'stop':
                     for data_key, writer in list(writers.items()):
@@ -1053,10 +1058,15 @@ def event_map(stream_name, data_keys, key_map={}, provenance={}):
                         new_event['data'] = dict(new_event['data'])
                         new_event['uid'] = str(uuid.uuid4())
                         new_event['descriptor'] = new_descriptor_uid
+                        # we might want to first map, then move
+                        # and maybe use a global func for move, since
+                        # moving requires also moving timestamps
                         for data_key in data_keys_copy:
                             value = doc['data'][data_key]
                             if new_key_map[data_key] is not '':
                                 new_event['data'][new_key_map[data_key]] = f(value, **kwargs)
+                                # update time stamp
+                                new_event['timestamps'][new_key_map[data_key]] = time.time()
                         # now delete keys that were mapped already
                         for key, val in new_key_map.items():
                             # double check user didn't map key to itself
@@ -1067,6 +1077,7 @@ def event_map(stream_name, data_keys, key_map={}, provenance={}):
                                         # finally make sure not empty string
                                         new_event['data'][val] = new_event['data'][key]
                                 del new_event['data'][key]
+                                del new_event['timestamps'][key]
                         yield 'event', new_event
                     except Exception as e:
                         new_stop = dict(uid=str(uuid.uuid4()),
