@@ -9,6 +9,7 @@ import logging
 import numbers
 import requests
 import time
+from copy import deepcopy
 from doct import Document
 from .core import (Header,
                    get_events as _get_events,
@@ -904,7 +905,7 @@ def _munge_time(t, timezone):
     return timezone.localize(t).replace(microsecond=0).isoformat()
 
 
-def store_dec(db, external_writers=None):
+def store_dec(db, external_writers=None, filled=True):
     """Decorate a generator of documents to save them to the databases.
 
     The input stream of (name, document) pairs passes through unchanged.
@@ -916,13 +917,17 @@ def store_dec(db, external_writers=None):
     db: ``databroker.Broker`` instance
         The databroker to store the documents in, must have writeable
         metadatastore and writeable filestore if ``external`` is not empty.
-    external_writers : dict
+    external_writers : dict, optional
         Maps data keys to a ``WriterClass``, which is responsible for writing
         data to disk and creating a record in filestore. It will be
         instantiated (possible multiple times) with the argument ``db.fs``.
         If it requires additional arguments, use ``functools.partial`` to
         produce a callable that requires only ``db.fs`` to instantiate the
         ``WriterClass``.
+    filled: bool, optional
+        If false, replace stored data with uid pointing to record in filestore.
+        If true, leave data as is. Default is true (as streams may be used
+            as input for later computations)
         """
     if external_writers is None:
         external_writers = {}  # {'name': WriterClass}
@@ -955,15 +960,16 @@ def store_dec(db, external_writers=None):
                     # The writer writes data to an external file, creates a
                     # datum record in the filestore database, and return that
                     # datum_id. We modify fs_doc in place, replacing the data
-                    # values with that datum_id.
+                    # values with that datum_id, only if filled=False.
                     for data_key, writer in writers.items():
                         # data doesn't have to exist
                         if data_key in fs_doc['data']:
                             fs_uid = writer.write(fs_doc['data'][data_key])
-                            fs_doc['data'][data_key] = fs_uid
+                            if not filled:
+                                fs_doc['data'][data_key] = fs_uid
 
                     doc.update(
-                        filled={k: False for k in external_writers.keys()})
+                        filled={k: filled for k in external_writers.keys()})
 
                 elif name == 'stop':
                     for data_key, writer in list(writers.items()):
@@ -983,7 +989,23 @@ def store_dec(db, external_writers=None):
     return wrap
 
 
-def event_map(stream_name, data_keys, provenance):
+def _map_keys(doc, keymap):
+    ''' Map keys in document using keymap.
+        doc : the document to remap
+        keymap : the keys to map to
+            ex :  {'image' : 'image2'}
+                {'image' : ''}
+        if second key is blank (''), then delete key
+    '''
+    for key, val in keymap.items():
+        if val is '':
+            doc.pop(key)
+        elif key is not val:
+            doc[val] = doc[key]
+            doc.pop(key)
+
+
+def event_map(stream_name, data_keys, key_map={}, provenance={}):
     """
     Map a function onto each event in a stream.
 
@@ -993,11 +1015,16 @@ def event_map(stream_name, data_keys, provenance):
         e.g., 'primary' or 'baseline'
     data_keys : dict
         key(s) in event['data'] to apply function to (e.g., 'image') mapped to
-        a dict with any updates to the data key value
-        (e.g., {'image' : {'shape': [10, 10]}}). In the simple case where the shape,
-        datatype, etc. are unchanged, the dict is just empty:
-        ``{'image': {}}`` and the original metadata passed through.
-    proveance : dict
+        a dict with any updates to the data key value (e.g., {'image' :
+        {'shape': [10, 10]}}). In the simple case where the shape, datatype,
+        etc. are unchanged, the dict is just empty: ``{'image': {}}`` and the
+        original metadata passed through.
+    key_map : dict
+        mapping of old key to new key, ``key_map = {'image' : 'sq'}`` will save
+        the transformed image into ``sq``
+        If mapped key is the empty string, the key is deleted from event
+        Will also map keys not in data_keys (untransformed keys).
+    provenance : dict
         metadata about this operation
     """
     def outer(f):
@@ -1018,15 +1045,21 @@ def event_map(stream_name, data_keys, provenance):
                         raise RuntimeError("Received EventDescriptor before "
                                            "RunStart.")
                     descriptor_uid = doc_or_uid_to_uid(doc)
-                    new_data_keys = dict(doc['data_keys'])
-                    for k, v in new_data_keys.items():
-                        new_data_keys[k].update(v)
+                    new_data_keys = deepcopy(doc['data_keys'])
+                    data_keys_copy = deepcopy(data_keys) #need to deepcopy
+                    # copy new keys (data_keys) into new_data_keys
+                    for k, v in data_keys_copy.items():
+                        # don't update, just replace
+                        new_data_keys[k] = v #reason for deepcopy
+                    # now re-map final keys
+                    _map_keys(new_data_keys, key_map)
                     new_descriptor_uid = str(uuid.uuid4())
                     new_descriptor = dict(uid=new_descriptor_uid,
                                           time=time.time(),
                                           run_start=run_start_uid,
                                           data_keys=new_data_keys,
                                           name=stream_name)
+                    print(new_data_keys)
                     yield 'descriptor', new_descriptor
 
                 elif (name == 'event' and
@@ -1040,9 +1073,13 @@ def event_map(stream_name, data_keys, provenance):
                         new_event['data'] = dict(new_event['data'])
                         new_event['uid'] = str(uuid.uuid4())
                         new_event['descriptor'] = new_descriptor_uid
-                        for data_key in new_data_keys:
+                        # need to update data and timestamps
+                        for data_key in data_keys_copy:
                             value = doc['data'][data_key]
                             new_event['data'][data_key] = f(value, **kwargs)
+                            new_event['timestamps'][data_key] = time.time()
+                        _map_keys(new_event['data'], key_map)
+                        _map_keys(new_event['timestamps'], key_map)
                         yield 'event', new_event
                     except Exception as e:
                         new_stop = dict(uid=str(uuid.uuid4()),
