@@ -7,8 +7,8 @@ import six
 import warnings
 import logging
 from requests import HTTPError
-from ..metadatastore.core import (NoRunStart, NoEventDescriptors, NoRunStop,
-                                  BAD_KEYS_FMT)
+from .mongo_core import (NoRunStart, NoEventDescriptors, NoRunStop,
+                         BAD_KEYS_FMT)
 
 logger = logging.getLogger(__name__)
 
