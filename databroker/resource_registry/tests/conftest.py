@@ -5,7 +5,7 @@ from databroker.resource_registry import mongo as ffs
 import uuid
 
 
-@pytest.fixture(params=[0, 1], scope='function')
+@pytest.fixture(params=[1], scope='function')
 def fs(request):
     '''Provide a function level scoped FileStore instance talking to
     temporary database on localhost:27017 with both v0 and v1.
