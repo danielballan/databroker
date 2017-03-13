@@ -449,9 +449,3 @@ def test_bad_event_desc(mds_all):
         mdsc.insert_descriptor(data_keys=data_keys,
                                time=ttime.time(),
                                run_start=rs, uid=str(uuid.uuid4()))
-
-
-def test_load_configuration_smoke():
-    from ..conf import load_configuration
-
-    load_configuration('metadatastore', 'MDS', ['host', 'database', 'port'])
