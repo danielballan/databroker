@@ -15,27 +15,9 @@ import os
 from .core import (Header,
                    get_fields,  # for convenience
                    Images,
-                   ALL,
-                   EventSourceShim,
-                   _check_fields_exist)
-
-
-def _format_time(search_dict, tz):
-    """Helper function to format the time arguments in a search dict
-
-    Expects 'start_time' and 'stop_time'
-
-    ..warning: Does in-place mutation of the search_dict
-    """
-    time_dict = {}
-    start_time = search_dict.pop('start_time', None)
-    stop_time = search_dict.pop('stop_time', None)
-    if start_time:
-        time_dict['$gte'] = _normalize_human_friendly_time(start_time, tz)
-    if stop_time:
-        time_dict['$lte'] = _normalize_human_friendly_time(stop_time, tz)
-    if time_dict:
-        search_dict['time'] = time_dict
+                   ALL)
+from .eventsource import EventSourceShim, check_fields_exist
+from .headersource import HeaderSourceShim, safe_get_stop, format_time
 
 
 # human friendly timestamp formats we'll parse
@@ -179,7 +161,7 @@ def _(key, db):
                          "and could become too large.")
     start = -key.start
     result = list(db.mds.find_last(start))[stop::key.step]
-    stop = list(_safe_get_stop(db.mds, s) for s in result)
+    stop = list(safe_get_stop(db.mds, s) for s in result)
     return list(zip(result, stop))
 
 
@@ -203,7 +185,7 @@ def _(key, db):
             except StopIteration:
                 raise IndexError(
                     "There are only {0} runs.".format(i))
-    return [(result, _safe_get_stop(db.mds, result))]
+    return [(result, safe_get_stop(db.mds, result))]
 
 
 @search.register(str)
@@ -231,7 +213,7 @@ def _(key, db):
         raise ValueError("key=%r matches %d runs. Provide "
                          "more characters." % (key, len(results)))
     result, = results
-    return [(result, _safe_get_stop(db.mds, result))]
+    return [(result, safe_get_stop(db.mds, result))]
 
 
 @search.register(set)
@@ -288,7 +270,7 @@ class BrokerES(object):
         "close over the timezone config"
         # modifies a query dict in place, remove keys 'start_time' and
         # 'stop_time' and adding $lte and/or $gte queries on 'time' key
-        _format_time(val, self.hs.mds.config['timezone'])
+        format_time(val, self.hs.mds.config['timezone'])
 
     @property
     def filters(self):
@@ -541,7 +523,7 @@ class BrokerES(object):
         else:
             headers = [headers]
 
-        _check_fields_exist(fields if fields else [], headers)
+        check_fields_exist(fields if fields else [], headers)
 
         for h in headers:
             for es in self.event_sources:
@@ -595,7 +577,7 @@ class BrokerES(object):
         else:
             headers = [headers]
 
-        _check_fields_exist(fields if fields else [], headers)
+        check_fields_exist(fields if fields else [], headers)
 
         for h in headers:
             for es in self.event_sources:
@@ -1070,41 +1052,3 @@ def _munge_time(t, timezone):
     """
     t = datetime.fromtimestamp(t)
     return timezone.localize(t).replace(microsecond=0).isoformat()
-
-
-class HeaderSourceShim(object):
-    '''Shim class to turn a mds object into a HeaderSource
-
-    This will presumably be deleted if this API makes it's way back down
-    into the implementations
-    '''
-    def __init__(self, mds):
-        self.mds = mds
-
-    def __call__(self, text_search=None, filters=None, **kwargs):
-        if filters is None:
-            filters = []
-        if text_search is not None:
-            query = {'$and': [{'$text': {'$search': text_search}}] + filters}
-        else:
-            # Include empty {} here so that '$and' gets at least one query.
-            _format_time(kwargs, self.mds.config['timezone'])
-            query = {'$and': [{}] + [kwargs] + filters}
-
-        starts = tuple(self.mds.find_run_starts(**query))
-
-        stops = tuple(_safe_get_stop(self.mds, s) for s in starts)
-        return zip(starts, stops)
-
-    def __getitem__(self, k):
-        return search(k, self)
-
-    def insert(self, name, doc):
-        return self.mds.insert(name, doc)
-
-
-def _safe_get_stop(mds, s):
-    try:
-        return mds.stop_by_start(s)
-    except mds.NoRunStop:
-        return None
