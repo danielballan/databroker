@@ -4,9 +4,9 @@ from __future__ import (absolute_import, division, print_function,
 import six
 import pymongo
 from pymongo import MongoClient
-from . import core
+from . import mongo_core
 
-_API_MAP = {1: core}
+_API_MAP = {1: mongo_core}
 
 
 class MDSRO(object):
