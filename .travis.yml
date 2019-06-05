@@ -42,15 +42,15 @@ matrix:
 install:
   - pip install --upgrade cython
   - pip install --quiet --upgrade --global-option='--without-libyaml' pyyaml
-  - pip install .[all]
-  - pip install -r test-requirements.txt
+  - pip install -U .[all]
+  - pip install -Ur test-requirements.txt
   - pip install codecov
 
 script:
   - coverage run run_tests.py
   - coverage report -m
   - set -e
-  - pip install -r docs-requirements.txt
+  - pip install -Ur docs-requirements.txt
   - make -C doc html
   - |
     if [ $PUBLISH_DOCS ]; then
