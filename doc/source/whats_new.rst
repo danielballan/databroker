@@ -9,7 +9,6 @@ and any related discussion.
 
 .. include:: whats_new/v0.12.2.txt
 .. include:: whats_new/v0.12.1.txt
-.. include:: whats_new/v0.12.0.txt
 .. include:: whats_new/v0.11.3.txt
 .. include:: whats_new/v0.11.2.txt
 .. include:: whats_new/v0.11.1.txt
