@@ -68,15 +68,19 @@ class _Entries(collections.abc.Mapping):
         cursor = self.catalog._run_start_collection.find(
             self.catalog._query, **find_kwargs)
         for run_start_doc in cursor:
-            yield run_start_doc['uid']
+            uid = run_start_doc['uid']
+            self.__cache[uid] = run_start_doc
+            yield uid
 
     def __getitem__(self, name):
-        run_start_doc = self._find_run_start_doc(name)
-        uid = run_start_doc['uid']
         try:
-            entry = self.__cache[uid]
-            logger.debug('Mongo Entries cache found %r', uid)
+            # The name may not even be uid, but try the cache first before
+            # paying to figure out what it is....
+            entry = self.__cache[name]
+            logger.debug('Mongo Entries cache found %r', name)
         except KeyError:
+            run_start_doc = self._find_run_start_doc(name)
+            uid = run_start_doc['uid']
             entry = self._doc_to_entry(run_start_doc)
             self.__cache[uid] = entry
         # The user has requested one specific Entry. In order to give them a
