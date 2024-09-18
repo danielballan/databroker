@@ -11,6 +11,7 @@ from tiled.queries import (
     Eq,
     FullText,
     In,
+    KeyLookup,
     NotEq,
     NotIn,
     Operator,

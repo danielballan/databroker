@@ -35,7 +35,7 @@ from tiled.structures.array import (
 from tiled.adapters.mapping import MapAdapter
 from tiled.iterviews import KeysView, ItemsView, ValuesView
 from tiled.query_registration import QueryTranslationRegistry
-from tiled.queries import Contains, Comparison, Eq, FullText, In, NotEq, NotIn, Regex
+from tiled.queries import Contains, Comparison, Eq, FullText, KeyLookup, In, NotEq, NotIn, Regex
 from tiled.adapters.utils import (
     tree_repr,
     IndexersMixin,
@@ -1842,6 +1842,12 @@ def full_text_search(query, catalog):
     )
 
 
+def key_lookup(query, catalog):
+    return catalog.apply_mongo_query(
+        {"uid": query.key},
+    )
+
+
 MongoAdapter.register_query(_PartialUID, partial_uid)
 MongoAdapter.register_query(_ScanID, scan_id)
 MongoAdapter.register_query(ScanIDRange, scan_id_range)
@@ -1850,6 +1856,7 @@ MongoAdapter.register_query(Contains, contains)
 MongoAdapter.register_query(Eq, eq)
 MongoAdapter.register_query(FullText, full_text_search)
 MongoAdapter.register_query(In, _in)
+MongoAdapter.register_query(KeyLookup, key_lookup)
 MongoAdapter.register_query(NotEq, not_eq)
 MongoAdapter.register_query(NotIn, not_in)
 MongoAdapter.register_query(Regex, regex)
